@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAP AI Core Proxy Admin</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --bg-color: #0f0f1a;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --font-family: 'Inter', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-family);
+            line-height: 1.5;
+            overflow-x: hidden;
+            display: flex;
+            height: 100vh;
+        }
+
+        /* Login Page */
+        #login-screen {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .login-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 2.5rem;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 400px;
+            backdrop-filter: blur(10px);
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+
+        .login-card h2 {
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 0.75rem;
+            margin-bottom: 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--card-border);
+            color: white;
+            border-radius: 6px;
+            font-family: var(--font-family);
+            transition: all 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+        }
+
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: var(--font-family);
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: var(--accent-hover);
+        }
+        
+        button.danger {
+            background: transparent;
+            border: 1px solid var(--danger);
+            color: var(--danger);
+        }
+        button.danger:hover {
+            background: var(--danger);
+            color: white;
+        }
+        button.small {
+            width: auto;
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+        }
+
+        /* App Layout */
+        #app {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background: var(--card-bg);
+            border-right: 1px solid var(--card-border);
+            display: flex;
+            flex-direction: column;
+            padding: 1.5rem 0;
+            backdrop-filter: blur(10px);
+        }
+
+        .sidebar-header {
+            padding: 0 1.5rem 1.5rem 1.5rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--accent);
+            border-bottom: 1px solid var(--card-border);
+            margin-bottom: 1rem;
+        }
+
+        .nav-item {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--text-muted);
+            transition: all 0.2s;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-main);
+            border-right: 3px solid var(--accent);
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 2rem;
+            overflow-y: auto;
+            background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.05), transparent 40%);
+        }
+
+        /* Tabs */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease-out;
+        }
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 1.5rem;
+            border-radius: 12px;
+            backdrop-filter: blur(5px);
+        }
+
+        .card-title {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .card-value {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        /* Status Dot */
+        .status-dot {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background-color: var(--success);
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 10px var(--success);
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            font-size: 0.95rem;
+        }
+
+        th, td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        th {
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        tr:hover td {
+            background: rgba(255,255,255,0.02);
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: #1e1e2e;
+            border: 1px solid var(--card-border);
+            padding: 2rem;
+            border-radius: 12px;
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            width: auto;
+            padding: 0;
+            cursor: pointer;
+        }
+        .close-btn:hover { color: white; background: transparent; }
+
+        /* Utilities */
+        .flex-between { display: flex; justify-content: space-between; align-items: center; }
+        .gap-2 { gap: 0.5rem; display: flex; }
+        .mb-4 { margin-bottom: 1rem; }
+        .text-muted { color: var(--text-muted); font-size: 0.9rem; }
+        
+        .mask-key {
+            cursor: pointer;
+            font-family: monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+        .mask-key:hover { background: rgba(99, 102, 241, 0.2); }
+
+        /* Toast */
+        #toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: var(--accent);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 3000;
+        }
+        #toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Login Screen -->
+    <div id="login-screen">
+        <div class="login-card">
+            <h2>Admin Login</h2>
+            <p class="mb-4 text-muted">Enter admin password to access proxy dashboard.</p>
+            <input type="password" id="admin-pwd" placeholder="Admin Password" onkeypress="if(event.key === 'Enter') login()">
+            <button onclick="login()">Log In</button>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                SAP AI Proxy
+            </div>
+            <div class="nav-item active" onclick="switchTab('dashboard')">
+                <span>📊</span> Dashboard
+            </div>
+            <div class="nav-item" onclick="switchTab('users')">
+                <span>🔑</span> Users & Keys
+            </div>
+            <div class="nav-item" onclick="switchTab('usage')">
+                <span>📈</span> Usage Logs
+            </div>
+            <div style="flex: 1;"></div>
+            <div class="nav-item" onclick="logout()">
+                <span>🚪</span> Logout
+            </div>
+        </div>
+
+        <div class="main-content">
+            <!-- Dashboard Tab -->
+            <div id="tab-dashboard" class="tab-content active">
+                <h2 class="mb-4">System Overview</h2>
+                <div class="stats-grid">
+                    <div class="card">
+                        <div class="card-title">Server Status</div>
+                        <div class="card-value" style="font-size: 1.5rem; display: flex; align-items: center;">
+                            <span class="status-dot" id="stat-status-dot"></span> <span id="stat-status">Checking...</span>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Active Users</div>
+                        <div class="card-value" id="stat-users">0</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Total Requests</div>
+                        <div class="card-value" id="stat-today-req">0</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Today's Tokens</div>
+                        <div class="card-value" id="stat-today-tok">0</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-title">Total Tokens</div>
+                        <div class="card-value" id="stat-total-tok">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Tab -->
+            <div id="tab-users" class="tab-content">
+                <div class="flex-between mb-4">
+                    <h2>Users & API Keys</h2>
+                    <button class="small" onclick="openModal()" style="width: auto;">+ Add User</button>
+                </div>
+                <div class="card" style="padding: 0; overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>User ID</th>
+                                <th>API Key</th>
+                                <th>Deployment ID</th>
+                                <th>Resource Group</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="keys-tbody">
+                            <!-- Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Usage Tab -->
+            <div id="tab-usage" class="tab-content">
+                <h2 class="mb-4">Usage Logs</h2>
+                <div class="card mb-4" style="display: flex; gap: 1rem; align-items: flex-end;">
+                    <div style="flex: 1;">
+                        <label class="text-muted">Filter by User</label>
+                        <select id="usage-user-select">
+                            <option value="">All Users</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1;">
+                        <label class="text-muted">Filter by Date</label>
+                        <input type="date" id="usage-date" style="margin-bottom: 0;">
+                    </div>
+                    <div>
+                        <button onclick="loadUsage()" style="width: auto; padding: 0.75rem 1.5rem;">Filter</button>
+                    </div>
+                </div>
+                
+                <div class="card" style="padding: 0; overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Timestamp</th>
+                                <th>User ID</th>
+                                <th>Deployment</th>
+                                <th>Prompt</th>
+                                <th>Completion</th>
+                                <th>Total Tokens</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usage-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="key-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Add User Key</h2>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div>
+                <label class="text-muted">User ID (Name/Team)</label>
+                <input type="text" id="form-user-id" placeholder="e.g. Alice">
+                
+                <label class="text-muted">API Key</label>
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                    <input type="text" id="form-key" placeholder="sk-..." style="margin-bottom: 0;">
+                    <button class="small" onclick="generateKey()">Generate</button>
+                </div>
+                
+                <label class="text-muted">Deployment ID (Model)</label>
+                <input type="text" id="form-deployment" placeholder="d1234abcd5678 (optional)">
+                
+                <label class="text-muted">Resource Group</label>
+                <input type="text" id="form-rg" placeholder="default" value="default">
+                
+                <input type="hidden" id="form-original-key">
+                
+                <button onclick="saveKey()" style="margin-top: 1rem;">Save Configuration</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast">Message</div>
+
+    <script>
+        let token = sessionStorage.getItem("admin_token") || "";
+        
+        if (token) {
+            showApp();
+        }
+
+        async function apiCall(endpoint, method = "GET", body = null) {
+            const headers = { "Authorization": `Bearer ${token}` };
+            if (body) headers["Content-Type"] = "application/json";
+            
+            try {
+                const res = await fetch(endpoint, {
+                    method,
+                    headers,
+                    body: body ? JSON.stringify(body) : null
+                });
+                
+                if (res.status === 401) {
+                    logout();
+                    throw new Error("Unauthorized");
+                }
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || "API Error");
+                }
+                return await res.json();
+            } catch (e) {
+                if (e.message !== "Unauthorized") showToast(e.message, true);
+                throw e;
+            }
+        }
+
+        async function login() {
+            const pwd = document.getElementById("admin-pwd").value;
+            if (!pwd) return;
+            token = pwd;
+            try {
+                await apiCall("/admin/api/stats");
+                sessionStorage.setItem("admin_token", token);
+                showApp();
+                showToast("Logged in successfully");
+            } catch (e) {
+                token = "";
+                sessionStorage.removeItem("admin_token");
+                if(e.message === "Unauthorized") showToast("Invalid Password", true);
+            }
+        }
+
+        function logout() {
+            token = "";
+            sessionStorage.removeItem("admin_token");
+            document.getElementById("login-screen").style.display = "flex";
+            document.getElementById("app").style.display = "none";
+            document.getElementById("admin-pwd").value = "";
+        }
+
+        function showApp() {
+            document.getElementById("login-screen").style.display = "none";
+            document.getElementById("app").style.display = "flex";
+            loadDashboard();
+            loadKeys();
+        }
+
+        function switchTab(tabId) {
+            document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+            document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+            
+            document.getElementById(`tab-${tabId}`).classList.add("active");
+            event.currentTarget.classList.add("active");
+            
+            if (tabId === 'dashboard') loadDashboard();
+            if (tabId === 'users') loadKeys();
+            if (tabId === 'usage') loadUsage();
+        }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById("toast");
+            toast.innerText = msg;
+            toast.style.backgroundColor = isError ? "var(--danger)" : "var(--success)";
+            toast.classList.add("show");
+            setTimeout(() => toast.classList.remove("show"), 3000);
+        }
+
+        // Dashboard
+        async function loadDashboard() {
+            try {
+                const stats = await apiCall("/admin/api/stats");
+                document.getElementById("stat-status-dot").style.backgroundColor = stats.server_status === 'ok' ? "var(--success)" : "var(--danger)";
+                document.getElementById("stat-status").innerText = stats.server_status === 'ok' ? "Online" : "Error";
+                document.getElementById("stat-users").innerText = stats.total_keys;
+                document.getElementById("stat-today-req").innerText = stats.total_requests.toLocaleString();
+                document.getElementById("stat-today-tok").innerText = stats.today_tokens.toLocaleString();
+                document.getElementById("stat-total-tok").innerText = stats.total_tokens.toLocaleString();
+            } catch (e) {}
+        }
+
+        // Keys Management
+        async function loadKeys() {
+            try {
+                const data = await apiCall("/admin/api/keys");
+                const tbody = document.getElementById("keys-tbody");
+                const select = document.getElementById("usage-user-select");
+                
+                tbody.innerHTML = "";
+                let selectOptions = `<option value="">All Users</option>`;
+                
+                Object.entries(data.keys).forEach(([key, config]) => {
+                    const uid = config.user_id || `key-${key.substring(0,4)}***`;
+                    selectOptions += `<option value="${uid}">${uid}</option>`;
+                    
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td style="font-weight: 600;">${uid}</td>
+                        <td>
+                            <span class="mask-key" onclick="toggleKey(this, '${key}')" data-key="${key}" title="Click to reveal/copy">
+                                ${key.substring(0,4)}••••••••
+                            </span>
+                        </td>
+                        <td style="color: var(--text-muted);">${config.deployment_id || '<i>Default</i>'}</td>
+                        <td style="color: var(--text-muted);">${config.resource_group || 'default'}</td>
+                        <td>
+                            <div class="gap-2">
+                                <button class="small" onclick="editKey('${key}', '${uid}', '${config.deployment_id||''}', '${config.resource_group||''}')">Edit</button>
+                                <button class="small danger" onclick="deleteKey('${key}')">Del</button>
+                            </div>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                
+                const currentVal = select.value;
+                select.innerHTML = selectOptions;
+                select.value = currentVal;
+                
+            } catch (e) {}
+        }
+
+        function toggleKey(el, fullKey) {
+            if (el.innerText.includes("••••")) {
+                el.innerText = fullKey;
+                navigator.clipboard.writeText(fullKey);
+                showToast("Key copied to clipboard!");
+            } else {
+                el.innerText = fullKey.substring(0,4) + "••••••••";
+            }
+        }
+
+        function generateKey() {
+            const arr = new Uint8Array(16);
+            window.crypto.getRandomValues(arr);
+            const hex = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+            document.getElementById("form-key").value = `sk-${hex}`;
+        }
+
+        function openModal() {
+            document.getElementById("modal-title").innerText = "Add User Key";
+            document.getElementById("form-user-id").value = "";
+            document.getElementById("form-key").value = "";
+            document.getElementById("form-key").disabled = false;
+            document.getElementById("form-deployment").value = "";
+            document.getElementById("form-rg").value = "default";
+            document.getElementById("form-original-key").value = "";
+            document.getElementById("key-modal").style.display = "flex";
+        }
+
+        function editKey(key, uid, dep, rg) {
+            document.getElementById("modal-title").innerText = "Edit User Key";
+            document.getElementById("form-user-id").value = uid;
+            document.getElementById("form-key").value = key;
+            document.getElementById("form-key").disabled = true;
+            document.getElementById("form-deployment").value = dep;
+            document.getElementById("form-rg").value = rg || "default";
+            document.getElementById("form-original-key").value = key;
+            document.getElementById("key-modal").style.display = "flex";
+        }
+
+        function closeModal() {
+            document.getElementById("key-modal").style.display = "none";
+        }
+
+        async function saveKey() {
+            const isEdit = !!document.getElementById("form-original-key").value;
+            const key = document.getElementById("form-key").value.trim();
+            
+            if (!key) {
+                showToast("API Key cannot be empty", true);
+                return;
+            }
+
+            const config = {
+                user_id: document.getElementById("form-user-id").value.trim(),
+                deployment_id: document.getElementById("form-deployment").value.trim(),
+                resource_group: document.getElementById("form-rg").value.trim() || "default"
+            };
+
+            try {
+                if (isEdit) {
+                    await apiCall(`/admin/api/keys/${key}`, "PUT", { config });
+                    showToast("User updated");
+                } else {
+                    await apiCall("/admin/api/keys", "POST", { key, config });
+                    showToast("User added");
+                }
+                closeModal();
+                loadKeys();
+                loadDashboard();
+            } catch (e) {}
+        }
+
+        async function deleteKey(key) {
+            if (!confirm("Are you sure you want to delete this API Key? The user will immediately lose access.")) return;
+            try {
+                await apiCall(`/admin/api/keys/${key}`, "DELETE");
+                showToast("Key deleted");
+                loadKeys();
+                loadDashboard();
+            } catch (e) {}
+        }
+
+        // Usage Logs
+        async function loadUsage() {
+            const user = document.getElementById("usage-user-select").value;
+            const date = document.getElementById("usage-date").value;
+            
+            let url = `/admin/api/usage?limit=100`;
+            if (user) url += `&user_id=${encodeURIComponent(user)}`;
+            if (date) url += `&date=${encodeURIComponent(date)}`;
+
+            try {
+                const data = await apiCall(url);
+                const tbody = document.getElementById("usage-tbody");
+                tbody.innerHTML = "";
+                
+                if (data.logs.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding: 2rem;">No usage logs found.</td></tr>`;
+                    return;
+                }
+
+                data.logs.forEach(log => {
+                    const d = new Date(log.timestamp);
+                    const timeStr = `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td style="color: var(--text-muted); font-size: 0.85rem;">${timeStr}</td>
+                        <td style="font-weight: 600; color: var(--accent);">${log.user_id}</td>
+                        <td>${log.deployment_id || '-'}</td>
+                        <td style="color: var(--text-muted);">${log.prompt_tokens}</td>
+                        <td style="color: var(--text-muted);">${log.completion_tokens}</td>
+                        <td style="font-weight: 600;">${log.total_tokens.toLocaleString()}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (e) {}
+        }
+
+        // Background Refresh
+        setInterval(() => {
+            if (document.getElementById("tab-dashboard").classList.contains("active")) {
+                loadDashboard();
+            }
+        }, 30000);
+
+    </script>
+</body>
+</html>

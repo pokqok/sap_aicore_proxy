@@ -66,12 +66,12 @@
 
 ### 코드 스타일
 
-- ✅ 모든 코드를 `main.py` 한 파일에 유지하라
+- ✅ 코드는 기능별로 모듈화하여 관리하라 (`main.py`, `config.py`, `auth.py`, `proxy.py`, `admin.py`, `usage.py`)
 - ✅ 함수는 `async def`로 작성하라 (FastAPI 비동기 패턴)
 - ✅ 로깅은 `logger = logging.getLogger("sap-proxy")`를 사용하라
 - ✅ 설정은 `.env`와 `sap_key.json`에서 로드되도록 구성하라
-- ✅ 환경변수 이름은 `AI_CORE_` 또는 `PROXY_` 접두사를 사용하라
-- ✅ 여러 사용자 인증을 위한 `allowed_keys.json`을 읽고 `Authorization` 헤더를 검증하라
+- ✅ 여러 사용자 인증을 위한 `allowed_keys.json`을 읽고 `Authorization` 헤더를 검증하라 (딕셔너리 포맷 지원)
+- ✅ Admin UI는 `/static/admin.html` 단일 파일로 구성하고 순수 HTML/JS/CSS만 사용하라
 
 ### SAP AI Core 관련
 
