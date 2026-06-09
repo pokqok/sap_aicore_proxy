@@ -146,10 +146,14 @@ def _orch_stream_chunk_to_openai(line: str, model_name: str) -> str | None:
     Convert a single SSE line from Orchestration stream to OpenAI SSE format.
     Returns the converted SSE line string, or None if it should be skipped.
     """
+    # If line doesn't have SSE 'data: ' prefix but looks like JSON, treat it as data
     if not line.startswith("data: "):
-        return line
-
-    data_str = line[6:].strip()
+        if line.startswith("{"):
+            data_str = line.strip()
+        else:
+            return None  # skip non-data, non-JSON lines (e.g. "event:", "id:" lines)
+    else:
+        data_str = line[6:].strip()
 
     # Pass through [DONE]
     if data_str == "[DONE]":
@@ -160,24 +164,38 @@ def _orch_stream_chunk_to_openai(line: str, model_name: str) -> str | None:
     except json.JSONDecodeError:
         return line  # pass through unparseable lines
 
-    # If it already looks like an OpenAI chunk, pass through
-    if "object" in chunk and chunk.get("object", "").startswith("chat.completion"):
-        return line
-
-    # Extract from orchestration wrapper
+    # Extract from orchestration wrapper if present
     result = chunk.get("orchestration_result", chunk)
-    if "choices" in result:
-        openai_chunk = result
-    else:
-        openai_chunk = {
-            "id": chunk.get("request_id", f"chatcmpl-{uuid.uuid4().hex[:12]}"),
-            "object": "chat.completion.chunk",
-            "created": int(time.time()),
-            "model": model_name,
-            "choices": result.get("choices", []),
-        }
-        if "usage" in result and result["usage"]:
-            openai_chunk["usage"] = result["usage"]
+
+    # Resolve choices from result (or top-level chunk)
+    choices = result.get("choices", chunk.get("choices", []))
+
+    # Normalize choices: convert message → delta for streaming format
+    normalized_choices = []
+    for choice in choices:
+        c = dict(choice)
+        # If streaming sent 'message' instead of 'delta', convert it
+        if "message" in c and "delta" not in c:
+            c["delta"] = {"role": c["message"].get("role", "assistant"),
+                          "content": c["message"].get("content", "")}
+            del c["message"]
+        elif "delta" not in c:
+            c["delta"] = {}
+        normalized_choices.append(c)
+
+    req_id = (result.get("id")
+              or chunk.get("request_id")
+              or f"chatcmpl-{uuid.uuid4().hex[:12]}")
+
+    openai_chunk = {
+        "id": req_id,
+        "object": "chat.completion.chunk",
+        "created": result.get("created", int(time.time())),
+        "model": result.get("model", model_name),
+        "choices": normalized_choices,
+    }
+    if "usage" in result and result["usage"]:
+        openai_chunk["usage"] = result["usage"]
 
     return f"data: {json.dumps(openai_chunk)}"
 
@@ -238,6 +256,7 @@ async def chat_completions(request: Request):
                     async for line in resp.aiter_lines():
                         if not line:
                             continue
+                        logger.info(f"[stream raw] {line[:200]}")
                         converted = _orch_stream_chunk_to_openai(line, model_name)
                         if converted:
                             yield converted + "\n\n"
