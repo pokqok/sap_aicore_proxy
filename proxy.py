@@ -241,31 +241,59 @@ async def chat_completions(request: Request):
 
     if is_stream:
         async def stream_generator():
-            usage_data = None
+            # SAP Orchestration does not support native streaming.
+            # Make a regular non-streaming request and emit the result as SSE chunks.
             async with httpx.AsyncClient(timeout=120) as stream_client:
-                async with stream_client.stream("POST", target_url + "?stream=true", json=orch_body, headers=headers) as resp:
-                    if resp.status_code != 200:
-                        error_body = await resp.aread()
-                        logger.error(f"SAP error {resp.status_code}: {error_body}")
-                        yield f"data: {error_body.decode()}\n\n"
-                        return
-                    async for line in resp.aiter_lines():
-                        if not line:
-                            continue
-                        logger.info(f"[stream raw] {line[:200]}")
-                        converted = _orch_stream_chunk_to_openai(line, model_name)
-                        if converted:
-                            yield converted + "\n\n"
-                            # Try to extract usage from the chunk
-                            if converted.startswith("data: ") and not converted.endswith("[DONE]"):
-                                try:
-                                    chunk_data = json.loads(converted[6:])
-                                    if "usage" in chunk_data and chunk_data["usage"]:
-                                        usage_data = chunk_data["usage"]
-                                except Exception:
-                                    pass
-            if usage_data:
-                await log_usage(user_id, deployment_id, usage_data)
+                resp = await stream_client.post(target_url, json=orch_body, headers=headers)
+                if resp.status_code != 200:
+                    logger.error(f"SAP error {resp.status_code}: {resp.text}")
+                    yield f"data: {resp.text}\n\n"
+                    return
+
+                resp_json = resp.json()
+                openai_resp = _orch_response_to_openai(resp_json, model_name)
+
+                # Extract content from the non-streaming response
+                choices = openai_resp.get("choices", [])
+                usage = openai_resp.get("usage")
+                req_id = openai_resp.get("id", f"chatcmpl-{uuid.uuid4().hex[:12]}")
+
+                # Emit content as a single streaming chunk
+                if choices:
+                    content = choices[0].get("message", {}).get("content", "")
+                    chunk = {
+                        "id": req_id,
+                        "object": "chat.completion.chunk",
+                        "created": openai_resp.get("created", int(time.time())),
+                        "model": model_name,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {"role": "assistant", "content": content},
+                            "finish_reason": None,
+                        }],
+                    }
+                    yield f"data: {json.dumps(chunk)}\n\n"
+
+                    # Final chunk with finish_reason
+                    final_chunk = {
+                        "id": req_id,
+                        "object": "chat.completion.chunk",
+                        "created": openai_resp.get("created", int(time.time())),
+                        "model": model_name,
+                        "choices": [{
+                            "index": 0,
+                            "delta": {},
+                            "finish_reason": choices[0].get("finish_reason", "stop"),
+                        }],
+                    }
+                    if usage:
+                        final_chunk["usage"] = usage
+                    yield f"data: {json.dumps(final_chunk)}\n\n"
+
+                yield "data: [DONE]\n\n"
+
+                if usage:
+                    await log_usage(user_id, deployment_id, usage)
 
         return StreamingResponse(stream_generator(), media_type="text/event-stream")
     else:
