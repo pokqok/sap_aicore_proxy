@@ -54,10 +54,14 @@ async def chat_completions(request: Request):
             detail="Missing deployment ID. Set it via API Key config, 'model' field, or x-sap-deployment-id header.",
         )
 
+    query_str = request.url.query
+    if "api-version" not in query_str:
+        query_str = query_str + "&api-version=2024-02-01" if query_str else "api-version=2024-02-01"
+
     target_url = (
         f"{settings.ai_core_base_url.rstrip('/')}"
         f"/v2/inference/deployments/{deployment_id}"
-        f"/chat/completions"
+        f"/chat/completions?{query_str}"
     )
 
     headers = {
