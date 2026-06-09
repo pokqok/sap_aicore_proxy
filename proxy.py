@@ -79,6 +79,9 @@ def _build_orchestration_body(body: dict) -> dict:
                 "llm_module_config": {
                     "model_name": model_name,
                     "model_params": model_params,
+                },
+                "templating_module_config": {
+                    "template": []
                 }
             }
         },
