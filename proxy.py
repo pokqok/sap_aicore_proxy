@@ -308,6 +308,8 @@ async def chat_completions(request: Request):
 
                         yield f"data: {error_text}\n\n"
                         return
+                    sent_done = False
+                    sent_finish_reason = False
                     async for line in resp.aiter_lines():
                         if not line:
                             continue
@@ -315,13 +317,38 @@ async def chat_completions(request: Request):
                         converted = _orch_stream_chunk_to_openai(line, model_name)
                         if converted:
                             yield converted + "\n\n"
-                            if converted.startswith("data: ") and not converted.endswith("[DONE]"):
+                            if converted.strip() == "data: [DONE]":
+                                sent_done = True
+                            elif converted.startswith("data: "):
                                 try:
                                     chunk_data = json.loads(converted[6:])
                                     if "usage" in chunk_data and chunk_data["usage"]:
                                         usage_data = chunk_data["usage"]
+                                    for choice in chunk_data.get("choices", []):
+                                        if choice.get("finish_reason") is not None:
+                                            sent_finish_reason = True
                                 except Exception:
                                     pass
+
+                    if not sent_finish_reason:
+                        final_chunk = {
+                            "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
+                            "object": "chat.completion.chunk",
+                            "created": int(time.time()),
+                            "model": model_name,
+                            "choices": [{
+                                "index": 0,
+                                "delta": {},
+                                "finish_reason": "stop",
+                            }],
+                        }
+                        if usage_data:
+                            final_chunk["usage"] = usage_data
+                        yield f"data: {json.dumps(final_chunk)}\n\n"
+
+                    if not sent_done:
+                        yield "data: [DONE]\n\n"
+
             if usage_data:
                 await log_usage(user_id, deployment_id, usage_data)
 
@@ -344,17 +371,24 @@ async def chat_completions(request: Request):
 
 @router.get("/models")
 async def list_models(request: Request):
-    from main import settings
-
+    key_config = getattr(request.state, "key_config", {})
     deployment_id, _ = _resolve_routing(request)
+    model_name = key_config.get("model_name") or "gpt-4o"
+
     return {
         "object": "list",
         "data": [
             {
-                "id": deployment_id or "orchestration",
+                "id": model_name,
                 "object": "model",
                 "created": 0,
                 "owned_by": "sap-ai-core",
-            }
+            },
+            {
+                "id": deployment_id or "orchestration",
+                "object": "model",
+                "created": 0,
+                "owned_by": "sap-ai-core-deployment",
+            },
         ],
     }
