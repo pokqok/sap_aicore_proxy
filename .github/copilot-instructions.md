@@ -1,0 +1,36 @@
+# GitHub Copilot Instructions — SAP AI Core OpenAI Proxy
+
+## 프로젝트 정체성
+이 프로젝트는 SAP AI Core를 OpenAI 호환 API로 변환하는 **단일 파일 경량 프록시**다.
+`main.py` 하나가 전부이며, 이 단순함이 의도된 설계다.
+
+## 금지 사항 및 유지 보수 규칙 (위반 시 프로젝트 망가짐)
+
+1. **파일 분리 금지**: `main.py`를 여러 파일(router, service, model 등)로 쪼개지 마라
+2. **API Key 미들웨어 임의 수정 금지**: 프록시의 자체 다중 사용자 인증(`verify_api_key`) 로직을 지우거나 변경하지 마라
+3. **DB 추가 금지**: SQLite, Redis, PostgreSQL 등 어떤 데이터베이스도 추가하지 마라
+4. **패키지 추가 금지**: `requirements.txt`에 새 패키지를 추가하지 마라 (현재 의존성으로 충분)
+5. **TokenCache 변경 금지**: SAP OAuth2 토큰 발급/갱신 로직은 정확히 동작함. 건드리면 인증이 깨짐
+6. **model 필드 제거 로직 유지**: `body.pop("model", None)`은 의도적 — SAP AI Core가 model 필드를 무시하므로
+7. **엔드포인트 경로 변경 금지**: `/v1/chat/completions`, `/v1/models`, `/health` 경로를 바꾸지 마라
+8. **Pydantic 요청 모델 금지**: request body는 `Request.json()`으로 raw dict를 받아 그대로 전달
+9. **Dockerfile에 apt-get 금지**: `python:3.12-slim` 이미지에 추가 패키지를 설치하지 마라
+10. **docker-compose healthcheck에 curl 금지**: 이미지에 curl이 없음. `python urllib`을 사용
+
+## 허용되는 수정
+
+- 버그 수정 (기존 동작 유지 범위)
+- 새 OpenAI 호환 엔드포인트 추가 (`/v1/` 아래, SAP가 지원하는 것만)
+- 에러 메시지/로깅 개선
+- 환경변수 추가 (Settings 클래스 + `sap_key.json` 로직 + `.env.example` + README.md 모두 동기화 필수)
+
+## 코드 컨벤션
+
+- 모든 엔드포인트: `async def`
+- 로거: `logging.getLogger("sap-proxy")`
+- 설정: `Settings(BaseSettings)` 클래스, `.env` 파일에서 로드
+- 환경변수 접두사: `AI_CORE_` 또는 `PROXY_`
+- SAP API 경로: `/v2/inference/deployments/{deployment_id}/...`
+- 헤더: `Authorization: Bearer {token}`, `AI-Resource-Group: {resource_group}`
+- 스트리밍: `StreamingResponse` + `text/event-stream`
+- 비스트리밍: `JSONResponse`
