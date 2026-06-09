@@ -250,8 +250,63 @@ async def chat_completions(request: Request):
                 async with stream_client.stream("POST", target_url, json=orch_body, headers=headers) as resp:
                     if resp.status_code != 200:
                         error_body = await resp.aread()
+                        error_text = error_body.decode()
                         logger.error(f"SAP error {resp.status_code}: {error_body}")
-                        yield f"data: {error_body.decode()}\n\n"
+
+                        if resp.status_code == 400 and "Streaming is not supported for this model" in error_text:
+                            async with httpx.AsyncClient(timeout=120) as fallback_client:
+                                fallback_body = dict(orch_body)
+                                fallback_orch_config = dict(fallback_body.get("orchestration_config", {}))
+                                fallback_orch_config.pop("stream", None)
+                                fallback_body["orchestration_config"] = fallback_orch_config
+
+                                fallback_resp = await fallback_client.post(target_url, json=fallback_body, headers=headers)
+                                if fallback_resp.status_code != 200:
+                                    logger.error(f"SAP fallback error {fallback_resp.status_code}: {fallback_resp.text}")
+                                    yield f"data: {fallback_resp.text}\n\n"
+                                    return
+
+                                resp_json = fallback_resp.json()
+                                openai_resp = _orch_response_to_openai(resp_json, model_name)
+                                choices = openai_resp.get("choices", [])
+                                usage = openai_resp.get("usage")
+                                req_id = openai_resp.get("id", f"chatcmpl-{uuid.uuid4().hex[:12]}")
+
+                                if choices:
+                                    content = choices[0].get("message", {}).get("content", "")
+                                    chunk = {
+                                        "id": req_id,
+                                        "object": "chat.completion.chunk",
+                                        "created": openai_resp.get("created", int(time.time())),
+                                        "model": model_name,
+                                        "choices": [{
+                                            "index": 0,
+                                            "delta": {"role": "assistant", "content": content},
+                                            "finish_reason": None,
+                                        }],
+                                    }
+                                    yield f"data: {json.dumps(chunk)}\n\n"
+
+                                    final_chunk = {
+                                        "id": req_id,
+                                        "object": "chat.completion.chunk",
+                                        "created": openai_resp.get("created", int(time.time())),
+                                        "model": model_name,
+                                        "choices": [{
+                                            "index": 0,
+                                            "delta": {},
+                                            "finish_reason": choices[0].get("finish_reason", "stop"),
+                                        }],
+                                    }
+                                    if usage:
+                                        final_chunk["usage"] = usage
+                                        usage_data = usage
+                                    yield f"data: {json.dumps(final_chunk)}\n\n"
+
+                                yield "data: [DONE]\n\n"
+                                return
+
+                        yield f"data: {error_text}\n\n"
                         return
                     async for line in resp.aiter_lines():
                         if not line:
