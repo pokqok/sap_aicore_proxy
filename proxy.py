@@ -105,10 +105,6 @@ def _build_orchestration_body(body: dict) -> dict:
     if history_messages:
         orch_body["messages_history"] = history_messages
 
-    # Pass through stream flag
-    if body.get("stream"):
-        orch_body["stream"] = True
-
     return orch_body
 
 
@@ -247,7 +243,7 @@ async def chat_completions(request: Request):
         async def stream_generator():
             usage_data = None
             async with httpx.AsyncClient(timeout=120) as stream_client:
-                async with stream_client.stream("POST", target_url, json=orch_body, headers=headers) as resp:
+                async with stream_client.stream("POST", target_url + "?stream=true", json=orch_body, headers=headers) as resp:
                     if resp.status_code != 200:
                         error_body = await resp.aread()
                         logger.error(f"SAP error {resp.status_code}: {error_body}")
