@@ -5,10 +5,10 @@
 Cursor, Windsurf 등 OpenAI 규격을 요구하는 서드파티 AI 코딩 도구에서 SAP AI Core 모델(GPT-4, Claude 등)을 직접 연동해 사용할 수 있도록 돕습니다.
 
 ### 핵심 기능
-- **규격 변환**: `/v1/chat/completions` 등 OpenAI 규격의 요청을 받아 SAP AI Core 규격으로 변환 및 응답(Streaming 지원).
+- **규격 변환 (오케스트레이션 호환)**: Cursor 등에서 보내는 OpenAI 규격의 요청을 SAP AI Core **Orchestration API** 전용 JSON 규격(`orchestration_config` 등)으로 변환하여 전송하고, 반환되는 오케스트레이션 응답을 다시 OpenAI 규격으로 역변환합니다. (스트리밍 SSE 포함)
 - **자동 인증 관리**: SAP XSUAA OAuth2 토큰 만료를 추적하고, 만료 전 자동으로 갱신(Token Cache).
 - **Admin 대시보드 내장**: 웹 UI를 통해 다중 사용자(API Key)를 발급하고, 모델 매핑 및 사용량 로그 조회 가능.
-- **다중 사용자 라우팅**: 사용자(API Key)별로 서로 다른 배포 모델(`deployment_id`)과 리소스 그룹(`resource_group`)을 지정 가능.
+- **다중 사용자 라우팅**: 사용자별로 서로 다른 배포 모델(`deployment_id`)과 리소스 그룹(`resource_group`) 지정이 가능하며, 클라이언트에서 전송한 `model` 파라미터를 동적으로 오케스트레이션에 매핑합니다.
 
 ---
 
@@ -18,7 +18,7 @@ Cursor, Windsurf 등 OpenAI 규격을 요구하는 서드파티 AI 코딩 도구
 - **`main.py`**: 애플리케이션 진입점(FastAPI app 생성), 전역 미들웨어(API Key 검증) 및 라우터 등록.
 - **`config.py`**: 환경변수(`.env`) 및 `sap_key.json`, `allowed_keys.json`을 읽고 설정 객체를 초기화.
 - **`auth.py`**: SAP AI Core와의 백그라운드 서버 대 서버 인증 처리 및 토큰 캐싱(`TokenCache`).
-- **`proxy.py`**: OpenAI 규격 API 엔드포인트 구현 (스트리밍 및 헤더/설정 기반 동적 모델 라우팅).
+- **`proxy.py`**: 이 프로젝트의 핵심입니다. OpenAI 규격 API 요청을 받아 SAP AI Core Orchestration 엔드포인트(`/completion`)가 요구하는 `module_configurations` 기반의 복잡한 JSON으로 변환하여 요청을 보내고, SSE 스트리밍 응답을 OpenAI 청크(chunk) 형태로 쪼개어 역변환합니다.
 - **`admin.py`**: `/admin` 경로로 제공되는 관리자 대시보드 API.
 - **`usage.py`**: 사용자별 토큰 소비량을 `usage.log`에 JSONL 형태로 Append 및 조회 파싱.
 - **`static/admin.html`**: 외부 라이브러리 없이 순수 HTML/CSS/JS로 짜여진 관리자 웹 대시보드.
@@ -51,4 +51,5 @@ Cursor, Windsurf 등 OpenAI 규격을 요구하는 서드파티 AI 코딩 도구
 
 ## 6. 개발 인수인계 시 주의사항
 - 다른 AI 에이전트(Cursor, Windsurf 등)에게 코드를 수정하게 하기 전, `CLAUDE.md`, `.cursorrules`, `.windsurfrules` 등의 규칙 파일을 지우지 마세요. 에이전트가 코드를 훼손하지 못하게 막는 안전장치입니다.
-- API Key 맵핑 로직(`request.state.key_config`)을 통해 중앙 집중식 라우팅이 이뤄지고 있습니다. `proxy.py` 로직 수정 시 이 컨텍스트 전달이 끊어지지 않도록 주의하세요.
+- **오케스트레이션 페이로드 구조**: 현재 `proxy.py`는 SAP AI Core의 **오케스트레이션(Orchestration)** 배포 방식에 맞춰져 있습니다. `llm_module_config`와 필수 항목인 빈 `templating_module_config` 구조를 유지해야 400 Bad Request 에러가 나지 않습니다.
+- **SQLite 마이그레이션(예정)**: 현재는 단일 파일 정책을 준수하기 위해 `allowed_keys.json`과 `usage.log` 등 파일 기반 저장을 사용 중이나, CF 컨테이너 재시작 시 휘발되는 문제가 있습니다. 향후 Persistent Volume 마운트나 DB 마이그레이션을 고려해야 합니다.
