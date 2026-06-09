@@ -243,11 +243,11 @@ async def chat_completions(request: Request):
 
     logger.info(f"[{user_id}] → Orchestration deployment={deployment_id}, model={model_name}, stream={is_stream}")
 
-    async with httpx.AsyncClient(timeout=120) as client:
-        if is_stream:
-            async def stream_generator():
-                usage_data = None
-                async with client.stream("POST", target_url, json=orch_body, headers=headers) as resp:
+    if is_stream:
+        async def stream_generator():
+            usage_data = None
+            async with httpx.AsyncClient(timeout=120) as stream_client:
+                async with stream_client.stream("POST", target_url, json=orch_body, headers=headers) as resp:
                     if resp.status_code != 200:
                         error_body = await resp.aread()
                         logger.error(f"SAP error {resp.status_code}: {error_body}")
@@ -268,11 +268,12 @@ async def chat_completions(request: Request):
                                         usage_data = chunk_data["usage"]
                                 except Exception:
                                     pass
-                if usage_data:
-                    await log_usage(user_id, deployment_id, usage_data)
+            if usage_data:
+                await log_usage(user_id, deployment_id, usage_data)
 
-            return StreamingResponse(stream_generator(), media_type="text/event-stream")
-        else:
+        return StreamingResponse(stream_generator(), media_type="text/event-stream")
+    else:
+        async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(target_url, json=orch_body, headers=headers)
             if resp.status_code != 200:
                 logger.error(f"SAP error {resp.status_code}: {resp.text}")
