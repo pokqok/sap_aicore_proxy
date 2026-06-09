@@ -407,14 +407,18 @@
             <!-- Usage Tab -->
             <div id="tab-usage" class="tab-content">
                 <h2 class="mb-4">Usage Logs</h2>
-                <div class="card mb-4" style="display: flex; gap: 1rem; align-items: flex-end;">
-                    <div style="flex: 1;">
+
+                <div id="usage-summary" class="mb-4" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem;">
+                </div>
+
+                <div class="card mb-4" style="display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 220px;">
                         <label class="text-muted">Filter by User</label>
                         <select id="usage-user-select">
                             <option value="">All Users</option>
                         </select>
                     </div>
-                    <div style="flex: 1;">
+                    <div style="flex: 1; min-width: 220px;">
                         <label class="text-muted">Filter by Date</label>
                         <input type="date" id="usage-date" style="margin-bottom: 0;">
                     </div>
@@ -422,17 +426,24 @@
                         <button onclick="loadUsage()" style="width: auto; padding: 0.75rem 1.5rem;">Filter</button>
                     </div>
                 </div>
+
+                <div class="card mb-4">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
+                        <h3 style="font-size: 1rem;">User Summary</h3>
+                        <div class="text-muted" id="usage-summary-caption">Recent usage overview</div>
+                    </div>
+                    <div id="usage-summary-list"></div>
+                </div>
                 
                 <div class="card" style="padding: 0; overflow-x: auto;">
                     <table>
                         <thead>
                             <tr>
-                                <th>Timestamp</th>
-                                <th>User ID</th>
-                                <th>Deployment</th>
+                                <th>Time</th>
+                                <th>User</th>
                                 <th>Prompt</th>
                                 <th>Completion</th>
-                                <th>Total Tokens</th>
+                                <th>Total</th>
                             </tr>
                         </thead>
                         <tbody id="usage-tbody">
@@ -697,6 +708,85 @@
         }
 
         // Usage Logs
+        function formatUsageTime(timestamp) {
+            const d = new Date(timestamp);
+            const now = new Date();
+            const isToday = d.toDateString() === now.toDateString();
+            return isToday
+                ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        }
+
+        function renderUsageSummary(summary) {
+            const cards = document.getElementById("usage-summary");
+            const list = document.getElementById("usage-summary-list");
+            cards.innerHTML = "";
+            list.innerHTML = "";
+
+            const entries = Object.entries(summary || {}).sort((a, b) => b[1].total_tokens - a[1].total_tokens);
+
+            if (entries.length === 0) {
+                cards.innerHTML = `
+                    <div class="card">
+                        <div class="text-muted">No summary data available.</div>
+                    </div>
+                `;
+                list.innerHTML = `<div class="text-muted">No usage records to summarize.</div>`;
+                return;
+            }
+
+            const totals = entries.reduce((acc, [, item]) => {
+                acc.requests += item.request_count || 0;
+                acc.tokens += item.total_tokens || 0;
+                acc.prompt += item.prompt_tokens || 0;
+                acc.completion += item.completion_tokens || 0;
+                return acc;
+            }, { requests: 0, tokens: 0, prompt: 0, completion: 0 });
+
+            cards.innerHTML = `
+                <div class="card">
+                    <div class="text-muted">Users</div>
+                    <div style="font-size: 1.8rem; font-weight: 700; margin-top: 0.35rem;">${entries.length}</div>
+                </div>
+                <div class="card">
+                    <div class="text-muted">Requests</div>
+                    <div style="font-size: 1.8rem; font-weight: 700; margin-top: 0.35rem;">${totals.requests.toLocaleString()}</div>
+                </div>
+                <div class="card">
+                    <div class="text-muted">Total Tokens</div>
+                    <div style="font-size: 1.8rem; font-weight: 700; margin-top: 0.35rem;">${totals.tokens.toLocaleString()}</div>
+                </div>
+                <div class="card">
+                    <div class="text-muted">Prompt / Completion</div>
+                    <div style="font-size: 1rem; font-weight: 600; margin-top: 0.6rem;">${totals.prompt.toLocaleString()} / ${totals.completion.toLocaleString()}</div>
+                </div>
+            `;
+
+            entries.forEach(([userId, item]) => {
+                const total = item.total_tokens || 0;
+                const prompt = item.prompt_tokens || 0;
+                const completion = item.completion_tokens || 0;
+                const promptRatio = total ? (prompt / total) * 100 : 0;
+                const completionRatio = total ? (completion / total) * 100 : 0;
+
+                const row = document.createElement("div");
+                row.style.padding = "0.9rem 0";
+                row.style.borderTop = "1px solid var(--card-border)";
+                row.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:1rem; flex-wrap:wrap; margin-bottom:0.4rem;">
+                        <div style="font-weight:600; color:var(--accent);">${userId}</div>
+                        <div class="text-muted" style="font-size:0.9rem;">${(item.request_count || 0).toLocaleString()} requests · ${total.toLocaleString()} tokens</div>
+                    </div>
+                    <div style="height:10px; border-radius:999px; overflow:hidden; background:rgba(255,255,255,0.06); display:flex; margin-bottom:0.35rem;">
+                        <div style="width:${promptRatio}%; background:#6366f1;"></div>
+                        <div style="width:${completionRatio}%; background:#22c55e;"></div>
+                    </div>
+                    <div class="text-muted" style="font-size:0.85rem;">Prompt ${prompt.toLocaleString()} · Completion ${completion.toLocaleString()}</div>
+                `;
+                list.appendChild(row);
+            });
+        }
+
         async function loadUsage() {
             const user = document.getElementById("usage-user-select").value;
             const date = document.getElementById("usage-date").value;
@@ -708,24 +798,25 @@
             try {
                 const data = await apiCall(url);
                 const tbody = document.getElementById("usage-tbody");
+                const caption = document.getElementById("usage-summary-caption");
                 tbody.innerHTML = "";
-                
+
+                renderUsageSummary(data.summary || {});
+                caption.innerText = `${(data.logs || []).length.toLocaleString()} recent logs`;
+
                 if (data.logs.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding: 2rem;">No usage logs found.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding: 2rem;">No usage logs found.</td></tr>`;
                     return;
                 }
 
-                data.logs.forEach(log => {
-                    const d = new Date(log.timestamp);
-                    const timeStr = `${d.toLocaleDateString()} ${d.toLocaleTimeString()}`;
+                data.logs.slice(0, 50).forEach(log => {
                     const tr = document.createElement("tr");
                     tr.innerHTML = `
-                        <td style="color: var(--text-muted); font-size: 0.85rem;">${timeStr}</td>
+                        <td style="color: var(--text-muted); font-size: 0.85rem;">${formatUsageTime(log.timestamp)}</td>
                         <td style="font-weight: 600; color: var(--accent);">${log.user_id}</td>
-                        <td>${log.deployment_id || '-'}</td>
-                        <td style="color: var(--text-muted);">${log.prompt_tokens}</td>
-                        <td style="color: var(--text-muted);">${log.completion_tokens}</td>
-                        <td style="font-weight: 600;">${log.total_tokens.toLocaleString()}</td>
+                        <td style="color: var(--text-muted);">${(log.prompt_tokens || 0).toLocaleString()}</td>
+                        <td style="color: var(--text-muted);">${(log.completion_tokens || 0).toLocaleString()}</td>
+                        <td style="font-weight: 700;">${(log.total_tokens || 0).toLocaleString()}</td>
                     `;
                     tbody.appendChild(tr);
                 });
