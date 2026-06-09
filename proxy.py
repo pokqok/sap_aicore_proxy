@@ -73,6 +73,20 @@ def _build_orchestration_body(body: dict) -> dict:
             model_params[key] = body[key]
 
     # Build orchestration request
+    messages = body.get("messages", [])
+
+    # SAP Orchestration requires non-empty template.
+    # Use the last user message as template, rest goes to messages_history.
+    template_messages = []
+    history_messages = []
+
+    if messages:
+        # Put the last message into template, everything else into history
+        template_messages = [messages[-1]]
+        history_messages = messages[:-1]
+    else:
+        template_messages = [{"role": "user", "content": "{{?input}}"}]
+
     orch_body = {
         "orchestration_config": {
             "module_configurations": {
@@ -81,12 +95,15 @@ def _build_orchestration_body(body: dict) -> dict:
                     "model_params": model_params,
                 },
                 "templating_module_config": {
-                    "template": []
+                    "template": template_messages
                 }
             }
         },
-        "messages_history": body.get("messages", []),
     }
+
+    # Only include messages_history if there are prior messages
+    if history_messages:
+        orch_body["messages_history"] = history_messages
 
     # Pass through stream flag
     if body.get("stream"):
@@ -219,7 +236,7 @@ async def chat_completions(request: Request):
                             continue
                         converted = _orch_stream_chunk_to_openai(line, model_name)
                         if converted:
-                            yield converted + "\n"
+                            yield converted + "\n\n"
                             # Try to extract usage from the chunk
                             if converted.startswith("data: ") and not converted.endswith("[DONE]"):
                                 try:
