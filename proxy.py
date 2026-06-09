@@ -75,7 +75,7 @@ def _build_orchestration_body(body: dict) -> dict:
     # Build orchestration request
     orch_body = {
         "orchestration_config": {
-            "modules": {
+            "module_configurations": {
                 "llm_module_config": {
                     "model_name": model_name,
                     "model_params": model_params,
