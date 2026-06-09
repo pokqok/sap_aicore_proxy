@@ -212,9 +212,13 @@ async def chat_completions(request: Request):
         "Content-Type": "application/json",
     }
 
-    model_name = body.get("model", "gpt-4o")
+    # Resolve model name: key_config > request body > default
+    model_name = key_config.get("model_name") or body.get("model", "gpt-4o")
     is_stream = body.get("stream", False)
     user_id = key_config.get("user_id", "anonymous")
+
+    # Override model in body so _build_orchestration_body uses the resolved name
+    body["model"] = model_name
 
     # Convert OpenAI body → Orchestration body
     orch_body = _build_orchestration_body(body)
