@@ -6,7 +6,7 @@ Loads settings from .env, sap_key.json, and allowed_keys.json.
 import os
 import json
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from pydantic_settings import BaseSettings
 
@@ -24,6 +24,20 @@ class Settings(BaseSettings):
     proxy_port: int = 8000
     log_level: str = "INFO"
     admin_password: str = ""
+    available_models: str = (
+        "amazon--nova-premier,amazon--nova-pro,amazon--nova-lite,amazon--nova-micro,"
+        "gpt-5,gpt-5.4,gpt-5.4-nano,gpt-5-mini,gpt-5-nano,gpt-4o,gpt-4o-mini,"
+        "gpt-4.1,gpt-4.1-mini,gpt-4.1-nano,o1,o3,o3-mini,o4-mini,gemini-2.5-pro,"
+        "gemini-2.5-flash,anthropic--claude-3-haiku,anthropic--claude-4-sonnet,"
+        "anthropic--claude-4.5-sonnet,anthropic--claude-4.5-haiku,"
+        "anthropic--claude-4.6-sonnet,anthropic--claude-4.6-opus,"
+        "anthropic--claude-4.7-opus,mistralai--mistral-large-instruct,"
+        "mistralai--mistral-small-instruct,mistralai--mistral-medium-instruct,"
+        "mistralai--mistral-small,cohere--command-a-reasoning,sonar-pro,sonar,sap-abap-1"
+    )
+
+    def available_models_list(self) -> List[str]:
+        return [m.strip() for m in self.available_models.split(",") if m.strip()]
 
     class Config:
         env_file = ".env"

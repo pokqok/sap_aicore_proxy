@@ -371,24 +371,20 @@ async def chat_completions(request: Request):
 
 @router.get("/models")
 async def list_models(request: Request):
-    key_config = getattr(request.state, "key_config", {})
-    deployment_id, _ = _resolve_routing(request)
-    model_name = key_config.get("model_name") or "gpt-4o"
+    from main import settings
 
-    return {
-        "object": "list",
-        "data": [
+    models = []
+    for model_id in settings.available_models_list():
+        models.append(
             {
-                "id": model_name,
+                "id": model_id,
                 "object": "model",
                 "created": 0,
                 "owned_by": "sap-ai-core",
-            },
-            {
-                "id": deployment_id or "orchestration",
-                "object": "model",
-                "created": 0,
-                "owned_by": "sap-ai-core-deployment",
-            },
-        ],
+            }
+        )
+
+    return {
+        "object": "list",
+        "data": models,
     }
