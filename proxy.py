@@ -72,9 +72,6 @@ def _build_orchestration_body(body: dict) -> dict:
         if key in body:
             model_params[key] = body[key]
 
-    # For orchestration scenarios, try real streaming via model_params.
-    if body.get("stream"):
-        model_params["stream"] = True
 
     # Build orchestration request
     messages = body.get("messages", [])
@@ -104,6 +101,9 @@ def _build_orchestration_body(body: dict) -> dict:
             }
         },
     }
+
+    if body.get("stream"):
+        orch_body["orchestration_config"]["stream"] = True
 
     # Only include messages_history if there are prior messages
     if history_messages:
